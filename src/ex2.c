@@ -12,6 +12,16 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+int *num_arrived;
+pthread_mutex_t barrier;
+pthread_cond_t go;
+
+typedef struct arg_pack {
+    int *arg_data;
+    int arg_num;
+    int arg_id;
+} arg_pack;
+
 // Print a helpful message followed by the contents of an array
 // Controlled by the value of SHOWDATA, which should be defined
 // at compile time. Useful for debugging.
@@ -29,7 +39,7 @@ void showdata (char *message,  int *data,  int n) {
 
 // Check that the contents of two integer arrays of the same length are equal
 // and return a C-style boolean
-int checkresult (int* correctresult,  int *data,  int n) {
+int checkresult (int *correctresult,  int *data,  int n) {
     int i;
 
     for (i=0; i<n; i++ ){
@@ -47,9 +57,119 @@ void sequentialprefixsum (int *data, int n) {
     }
 }
 
+void Barrier() {
+    pthread_mutex_lock(&barrier);
+    num_arrived += 1;
+
+    if (num_arrived == NTHREADS) {
+        num_arrived = 0;
+        pthread_cond_broadcast(&go);
+    } else {
+        pthread_cond_wait(&go, &barrier);
+    }
+
+    pthread_mutex_unlock(&barrier);
+}
+
+void *threadedsum(void *args) {
+    // TODO: Handle case where NITEMS and NTHREADS are small (for eg. just one item and thread in the array)
+    // TODO: WHAT HAPPENS IF NITEMS / NTHREADS == 1??? (eg, if 10 items and 6 threads)
+    arg_pack *thread_args = (arg_pack *) args;
+
+    int start_pos = (NITEMS / NTHREADS) * thread_args->arg_id;
+
+    // PHASE 1:
+    for (int i=start_pos+1; i<start_pos+thread_args->arg_num; i++) {
+        thread_args->arg_data[i] += thread_args->arg_data[i-1];
+    }
+    Barrier();
+
+    // PHASE 2:
+    if (thread_args->arg_id == 0) {
+        int current_elem_pos = 2 * thread_args->arg_num - 1;
+        int first_elem_pos = thread_args->arg_num - 1;
+        int final_elem_pos = NITEMS - 1;
+
+        int max_elem = thread_args->arg_data[first_elem_pos];
+        // TODO: Handle case where NTHREADS == 1
+        if (NTHREADS == 2) {
+            thread_args->arg_data[final_elem_pos] += max_elem;
+        } else {
+            for (int i=1; i<NTHREADS-1; i++) {
+                thread_args->arg_data[current_elem_pos] += max_elem;
+                max_elem = thread_args->arg_data[current_elem_pos];
+                current_elem_pos += thread_args->arg_num;
+            }
+            thread_args->arg_data[final_elem_pos] += max_elem;
+        }
+    }
+    Barrier();
+
+    // PHASE 3:
+    if (thread_args->arg_id != 0) {
+        int update_val = thread_args->arg_data[start_pos-1];
+        for (int i=start_pos; i<start_pos+thread_args->arg_num-1; i++) {
+            thread_args->arg_data[i] += update_val;
+        }
+    }
+}
 
 // YOU MUST WRITE THIS FUNCTION AND ANY ADDITIONAL FUNCTIONS YOU NEED
 void parallelprefixsum (int *data, int n) {
+    /* PHASE 0: Create the threads, after doing the above checks
+     * PHASE 1: Every thread performs a prefix sum sequentially across its chunk of data, in place.
+     * PHASE 2: Thread 0 performs a sequential prefix sum using just the highest indexed position from
+each chunk, in place. Other threads simply wait.
+     * PHASE 3: Every thread (except thread 0) adds the final value from the preceding chunk into every
+value in its own chunk, except the last position (which already has its correct value after phase 2), in place.
+     */
+
+    if (NTHREADS < 1) {
+        printf("Please specify at least 1 thread! .... exiting\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (n < 1) {
+        printf("Please add more items to the array! .... exiting\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // First check that there are more items in the array than there are threads
+    // If not, exit the program
+    if (n < NTHREADS) {
+        printf("Please add more items to the array than there are threads! .... exiting\n");
+        exit(EXIT_FAILURE);
+    }
+
+    pthread_t *threads;
+    arg_pack  *threadargs;
+
+    threads     = (pthread_t *) malloc (NTHREADS * sizeof(pthread_t));
+    threadargs  = (arg_pack *)  malloc (NTHREADS * sizeof(arg_pack));
+
+    // Have to use mutex instead of barriers because pthread_barrier_t is not supported on a mac, on which I am developing
+    // TODO: Port to pthread_barrier_t once I switch to DICE
+    pthread_mutex_init(&barrier, NULL);
+    pthread_cond_init(&go, NULL);
+
+    // Calculate the number of elements each thread will receive
+    // Using pointer arithmetic, each thread will only work on its allocated elements
+    // Based on its arg_id and number of elements
+    for (int i=0; i<NTHREADS; i++) {
+        threadargs[i].arg_id = i;
+        threadargs[i].arg_data = data;
+        if (i != NTHREADS - 1)
+            threadargs[i].arg_num = n / NTHREADS;
+        else
+            threadargs[i].arg_num = n / NTHREADS + n % NTHREADS;
+
+        pthread_create(&threads[i], NULL, threadedsum, (void *) &threadargs[i]);
+    }
+
+    for (int i=0; i<NTHREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
 }
 
 
