@@ -8,8 +8,12 @@
 // and whether or not to printout array contents (which is
 // useful for debugging, but not a good idea for large arrays).
 
-/*
- * 
+/* *** DICUSSION ***
+ * I have decided to allocate the number of elements in each thread in a straight
+ * forward way: use the (implicit) floor of the division between the number of 
+ * items and the number of threads, and allocate the remainder to the last one
+ * For instance: if given 10 items and 4 threads, the first three will have 2 and the last one will have 4 items
+ * since floor(10/4) = 2 and remainder(10/4) = 2, so 
  */
 
 #include <stdio.h>
@@ -154,13 +158,13 @@ value in its own chunk, except the last position (which already has its correct 
     threads     = (pthread_t *) malloc (NTHREADS * sizeof(pthread_t));
     threadargs  = (arg_pack *)  malloc (NTHREADS * sizeof(arg_pack));
 
-    // Have to use mutex instead of barriers because pthread_barrier_t is not supported on a mac, on which I am developing
-    // TODO: Port to pthread_barrier_t once I switch to DICE
+    // Have to use mutex instead of barriers because pthread_barrier_t is not supported on macOS, on which I am developing
+    // Tested on DICE, works as it should, but pthread_barrier_t still is not supported for some reason
     pthread_mutex_init(&barrier, NULL);
     pthread_cond_init(&go, NULL);
 
     // Calculate the number of elements each thread will receive
-    // Using pointer arithmetic, each thread will only work on its allocated elements
+    // Each thread will only work on its allocated elements (except thread 0)
     // Based on its arg_id and number of elements
     for (i=0; i<NTHREADS; i++) {
         threadargs[i].arg_id = i;
