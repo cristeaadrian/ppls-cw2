@@ -247,7 +247,7 @@ int main (int argc, char* argv[]) {
     int *arr1, *arr2, i;
 
     // Check that the compile time constants are sensible for this exercise
-    if ((NITEMS>100000000) || (NTHREADS>32)) {
+    if ((NITEMS>1000000000) || (NTHREADS>32)) {
         printf ("So much data or so many threads may not be a good idea! .... exiting\n");
         exit(EXIT_FAILURE);
     }
