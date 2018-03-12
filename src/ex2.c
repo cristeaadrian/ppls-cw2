@@ -72,6 +72,7 @@ void Barrier() {
 }
 
 void *threadedsum(void *args) {
+    int i;
     // TODO: Handle case where NITEMS and NTHREADS are small (for eg. just one item and thread in the array)
     // TODO: WHAT HAPPENS IF NITEMS / NTHREADS == 1??? (eg, if 10 items and 6 threads)
     arg_pack *thread_args = (arg_pack *) args;
@@ -79,7 +80,7 @@ void *threadedsum(void *args) {
     int start_pos = (NITEMS / NTHREADS) * thread_args->arg_id;
 
     // PHASE 1:
-    for (int i=start_pos+1; i<start_pos+thread_args->arg_num; i++) {
+    for (i=start_pos+1; i<start_pos+thread_args->arg_num; i++) {
         thread_args->arg_data[i] += thread_args->arg_data[i-1];
     }
     Barrier();
@@ -95,7 +96,7 @@ void *threadedsum(void *args) {
         if (NTHREADS == 2) {
             thread_args->arg_data[final_elem_pos] += max_elem;
         } else {
-            for (int i=1; i<NTHREADS-1; i++) {
+            for (i=1; i<NTHREADS-1; i++) {
                 thread_args->arg_data[current_elem_pos] += max_elem;
                 max_elem = thread_args->arg_data[current_elem_pos];
                 current_elem_pos += thread_args->arg_num;
@@ -108,7 +109,7 @@ void *threadedsum(void *args) {
     // PHASE 3:
     if (thread_args->arg_id != 0) {
         int update_val = thread_args->arg_data[start_pos-1];
-        for (int i=start_pos; i<start_pos+thread_args->arg_num-1; i++) {
+        for (i=start_pos; i<start_pos+thread_args->arg_num-1; i++) {
             thread_args->arg_data[i] += update_val;
         }
     }
@@ -123,6 +124,8 @@ each chunk, in place. Other threads simply wait.
      * PHASE 3: Every thread (except thread 0) adds the final value from the preceding chunk into every
 value in its own chunk, except the last position (which already has its correct value after phase 2), in place.
      */
+     
+    int i;
 
     if (NTHREADS < 1) {
         printf("Please specify at least 1 thread! .... exiting\n");
@@ -155,7 +158,7 @@ value in its own chunk, except the last position (which already has its correct 
     // Calculate the number of elements each thread will receive
     // Using pointer arithmetic, each thread will only work on its allocated elements
     // Based on its arg_id and number of elements
-    for (int i=0; i<NTHREADS; i++) {
+    for (i=0; i<NTHREADS; i++) {
         threadargs[i].arg_id = i;
         threadargs[i].arg_data = data;
         if (i != NTHREADS - 1)
@@ -166,7 +169,7 @@ value in its own chunk, except the last position (which already has its correct 
         pthread_create(&threads[i], NULL, threadedsum, (void *) &threadargs[i]);
     }
 
-    for (int i=0; i<NTHREADS; i++) {
+    for (i=0; i<NTHREADS; i++) {
         pthread_join(threads[i], NULL);
     }
 
