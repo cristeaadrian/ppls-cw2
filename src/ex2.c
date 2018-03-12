@@ -9,22 +9,22 @@
 // useful for debugging, but not a good idea for large arrays).
 
 /* *** DICUSSION ***
- * Because we have been told not to change the main function, I decided to do a 
- * sanity check of the compile time arguments in the parallelprefixsum function, 
- * just to be sure. For instance, it makes no sense not to have any items in the 
- * array, or to have no threads (but if given one thread the parallelprefixsum 
- * function will still work, albeit in a less efficient way than simply using 
- * sequentialprefixsum). Finally, I check that there are more items in the array 
+ * Because we have been told not to change the main function, I decided to do a
+ * sanity check of the compile time arguments in the parallelprefixsum function,
+ * just to be sure. For instance, it makes no sense not to have any items in the
+ * array, or to have no threads (but if given one thread the parallelprefixsum
+ * function will still work, albeit in a less efficient way than simply using
+ * sequentialprefixsum). Finally, I check that there are more items in the array
  * than there are threads, as required in the specification.
  *
  * I have decided to allocate the number of elements in each thread in a straight
- * forward way: use the (implicit) floor of the division between the number of 
+ * forward way: use the (implicit) floor of the division between the number of
  * items and the number of threads, and allocate the remainder to the last one
- * For instance: if given 10 items and 4 threads, the first three will have 2 and 
+ * For instance: if given 10 items and 4 threads, the first three will have 2 and
  * the last one will have 4 items since floor(10/4) = 2 and remainder(10/4) = 2.
  *
- * After this, I use a fork join method of creating the threads in the parallelprefixsum 
- * function, while the main logic of the algorithm is in *threadedsum. This is 
+ * After this, I use a fork join method of creating the threads in the parallelprefixsum
+ * function, while the main logic of the algorithm is in *threadedsum. This is
  * further divided into three phases, as described in the specification.
  *
  * Probably the most important aspect of my implementation is the use of the two
@@ -34,12 +34,12 @@
  * separate header and source files to create and use this type, but the mutex
  * together with the conditional variable work well to ensure that all threads
  * complete each phase before moving on to the next one.
- * 
+ *
  * The reason why this is important is that we can't be sure in what order the threads
- * will execute and interleave, and Thread 0 has to edit the already calculated 
+ * will execute and interleave, and Thread 0 has to edit the already calculated
  * partial sums, otherwise they might overwrite its Phase 2 calculations
  *
- * Furthermore, thread 0 has to finish its prefixing of top elements, because 
+ * Furthermore, thread 0 has to finish its prefixing of top elements, because
  * the other threads rely on these being correct in order to update their own
  * remaining elements. Thus, we need 2 barriers at which to stop and synch the threads
  * ensuring consistency between their results.
@@ -50,7 +50,6 @@
  * Sidenote: I probably enjoyed these courseworks the most this year. Thanks!
  */
 
-#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -94,15 +93,9 @@ int checkresult (int *correctresult,  int *data,  int n) {
 // Compute the prefix sum of an array **in place** sequentially
 void sequentialprefixsum (int *data, int n) {
     int i;
-    clock_t start, end;
-    double cpu_time_used;
-    start = clock();
     for (i=1; i<n; i++ ) {
         data[i] = data[i] + data[i-1];
     }
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("sequentialprefixsum() took %f seconds to execute \n", cpu_time_used);
 }
 
 void Barrier() {
@@ -141,13 +134,13 @@ void *threadedsum(void *args) {
         int final_elem_pos = NITEMS - 1;
 
         // In case NTHREADS == 1, it skips this contional completely,
-        // and continues to Phase 3, in which it does nothing, since it's 
-        // thread_args->arg_id is equal to 0. 
+        // and continues to Phase 3, in which it does nothing, since it's
+        // thread_args->arg_id is equal to 0.
         // The sum is already correct by phase 1!
         int max_elem = thread_args->arg_data[current_elem_pos];
         if (NTHREADS == 2) {
             thread_args->arg_data[final_elem_pos] += max_elem;
-        } 
+        }
         else if (NTHREADS > 2) {
             current_elem_pos += thread_args->arg_num;
             for (i=1; i<NTHREADS-1; i++) {
@@ -178,10 +171,7 @@ each chunk, in place. Other threads simply wait.
      * PHASE 3: Every thread (except thread 0) adds the final value from the preceding chunk into every
 value in its own chunk, except the last position (which already has its correct value after phase 2), in place.
      */
-    clock_t start, end;
-    double cpu_time_used;
-    start = clock();
-     
+
     int i;
 
     // There has to be at least one thread, otherwise what's the point? :)
@@ -235,10 +225,6 @@ value in its own chunk, except the last position (which already has its correct 
     for (i=0; i<NTHREADS; i++) {
         pthread_join(threads[i], NULL);
     }
-    
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("parallelprefixsum() took %f seconds to execute \n", cpu_time_used);
 }
 
 
@@ -247,7 +233,7 @@ int main (int argc, char* argv[]) {
     int *arr1, *arr2, i;
 
     // Check that the compile time constants are sensible for this exercise
-    if ((NITEMS>10000000000) || (NTHREADS>32)) {
+    if ((NITEMS>10000000) || (NTHREADS>32)) {
         printf ("So much data or so many threads may not be a good idea! .... exiting\n");
         exit(EXIT_FAILURE);
     }
