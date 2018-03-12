@@ -8,11 +8,15 @@
 // and whether or not to printout array contents (which is
 // useful for debugging, but not a good idea for large arrays).
 
+/*
+ * 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
-int *num_arrived;
+int num_arrived = 0;
 pthread_mutex_t barrier;
 pthread_cond_t go;
 
@@ -73,11 +77,10 @@ void Barrier() {
 
 void *threadedsum(void *args) {
     int i;
-    // TODO: Handle case where NITEMS and NTHREADS are small (for eg. just one item and thread in the array)
-    // TODO: WHAT HAPPENS IF NITEMS / NTHREADS == 1??? (eg, if 10 items and 6 threads)
     arg_pack *thread_args = (arg_pack *) args;
 
     int start_pos = (NITEMS / NTHREADS) * thread_args->arg_id;
+    int final_pos = start_pos + thread_args->arg_num - 1;
 
     // PHASE 1:
     for (i=start_pos+1; i<start_pos+thread_args->arg_num; i++) {
@@ -87,15 +90,15 @@ void *threadedsum(void *args) {
 
     // PHASE 2:
     if (thread_args->arg_id == 0) {
-        int current_elem_pos = 2 * thread_args->arg_num - 1;
-        int first_elem_pos = thread_args->arg_num - 1;
+        int current_elem_pos = thread_args->arg_num - 1;
         int final_elem_pos = NITEMS - 1;
 
-        int max_elem = thread_args->arg_data[first_elem_pos];
-        // TODO: Handle case where NTHREADS == 1
+        int max_elem = thread_args->arg_data[current_elem_pos];
         if (NTHREADS == 2) {
             thread_args->arg_data[final_elem_pos] += max_elem;
-        } else {
+        } 
+        else if (NTHREADS > 2) {
+            current_elem_pos += thread_args->arg_num;
             for (i=1; i<NTHREADS-1; i++) {
                 thread_args->arg_data[current_elem_pos] += max_elem;
                 max_elem = thread_args->arg_data[current_elem_pos];
@@ -109,7 +112,7 @@ void *threadedsum(void *args) {
     // PHASE 3:
     if (thread_args->arg_id != 0) {
         int update_val = thread_args->arg_data[start_pos-1];
-        for (i=start_pos; i<start_pos+thread_args->arg_num-1; i++) {
+        for (i=start_pos; i<final_pos; i++) {
             thread_args->arg_data[i] += update_val;
         }
     }
@@ -124,14 +127,15 @@ each chunk, in place. Other threads simply wait.
      * PHASE 3: Every thread (except thread 0) adds the final value from the preceding chunk into every
 value in its own chunk, except the last position (which already has its correct value after phase 2), in place.
      */
-     
     int i;
 
+    // There has to be at least one thread, otherwise what's the point? :)
     if (NTHREADS < 1) {
         printf("Please specify at least 1 thread! .... exiting\n");
         exit(EXIT_FAILURE);
     }
 
+    // There has to be at least one element in the array
     if (n < 1) {
         printf("Please add more items to the array! .... exiting\n");
         exit(EXIT_FAILURE);
