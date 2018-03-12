@@ -9,11 +9,43 @@
 // useful for debugging, but not a good idea for large arrays).
 
 /* *** DICUSSION ***
+ * Because we have been told not to change the main function, I decided to do a 
+ * sanity check of the compile time arguments in the parallelprefixsum function, 
+ * just to be sure. For instance, it makes no sense not to have any items in the 
+ * array, or to have no threads (but if given one thread the parallelprefixsum 
+ * function will still work, albeit in a less efficient way than simply using 
+ * sequentialprefixsum). Finally, I check that there are more items in the array 
+ * than there are threads, as required in the specification.
+ *
  * I have decided to allocate the number of elements in each thread in a straight
  * forward way: use the (implicit) floor of the division between the number of 
  * items and the number of threads, and allocate the remainder to the last one
- * For instance: if given 10 items and 4 threads, the first three will have 2 and the last one will have 4 items
- * since floor(10/4) = 2 and remainder(10/4) = 2, so 
+ * For instance: if given 10 items and 4 threads, the first three will have 2 and 
+ * the last one will have 4 items since floor(10/4) = 2 and remainder(10/4) = 2.
+ *
+ * After this, I use a fork join method of creating the threads in the parallelprefixsum 
+ * function, while the main logic of the algorithm is in *threadedsum. This is 
+ * further divided into three phases, as described in the specification.
+ *
+ * Probably the most important aspect of my implementation is the use of the two
+ * barriers, after phase one and phase two are complete. It's a custom DIY barrier
+ * as described in the lecture, since I did not manage to use the (optional) POSIX
+ * pthread_barrier_t either on my Mac or the DICE machines. I could have created
+ * separate header and source files to create and use this type, but the mutex
+ * together with the conditional variable work well to ensure that all threads
+ * complete each phase before moving on to the next one.
+ * 
+ * The reason why this is important is that we can't be sure in what order the threads
+ * will execute and interleave, and Thread 0 has to edit the already calculated 
+ * partial sums, otherwise they might overwrite its Phase 2 calculations
+ *
+ * Furthermore, thread 0 has to finish its prefixing of top elements, because 
+ * the other threads rely on these being correct in order to update their own
+ * remaining elements. Thus, we need 2 barriers at which to stop and synch the threads
+ * ensuring consistency between their results.
+ *
+ * All of the calculations are done in place, since they use pointers, and there is
+ * no copying of the arrays.
  */
 
 #include <stdio.h>
@@ -66,6 +98,7 @@ void sequentialprefixsum (int *data, int n) {
 }
 
 void Barrier() {
+    // Custom barrier using mutex locks and conditional variables declared globally
     pthread_mutex_lock(&barrier);
     num_arrived += 1;
 
@@ -83,6 +116,8 @@ void *threadedsum(void *args) {
     int i;
     arg_pack *thread_args = (arg_pack *) args;
 
+    // NITEMS and NTHREADS could have been packed into the arg_pack,
+    // but since they are available globally anyway, I didn't bother, plus it saves space
     int start_pos = (NITEMS / NTHREADS) * thread_args->arg_id;
     int final_pos = start_pos + thread_args->arg_num - 1;
 
@@ -97,6 +132,10 @@ void *threadedsum(void *args) {
         int current_elem_pos = thread_args->arg_num - 1;
         int final_elem_pos = NITEMS - 1;
 
+        // In case NTHREADS == 1, it skips this contional completely,
+        // and continues to Phase 3, in which it does nothing, since it's 
+        // thread_args->arg_id is equal to 0. 
+        // The sum is already correct by phase 1!
         int max_elem = thread_args->arg_data[current_elem_pos];
         if (NTHREADS == 2) {
             thread_args->arg_data[final_elem_pos] += max_elem;
@@ -172,15 +211,18 @@ value in its own chunk, except the last position (which already has its correct 
         if (i != NTHREADS - 1)
             threadargs[i].arg_num = n / NTHREADS;
         else
+            // Allocate the remainder to the last thread
             threadargs[i].arg_num = n / NTHREADS + n % NTHREADS;
 
+        // Create the threads in the same for-loop in which the arg_pack
+        // is created, to save some computational time, since they will have to
+        // wait at the first barrier anyway
         pthread_create(&threads[i], NULL, threadedsum, (void *) &threadargs[i]);
     }
 
     for (i=0; i<NTHREADS; i++) {
         pthread_join(threads[i], NULL);
     }
-
 }
 
 
