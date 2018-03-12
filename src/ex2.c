@@ -48,6 +48,7 @@
  * no copying of the arrays.
  */
 
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -91,10 +92,15 @@ int checkresult (int *correctresult,  int *data,  int n) {
 // Compute the prefix sum of an array **in place** sequentially
 void sequentialprefixsum (int *data, int n) {
     int i;
-
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
     for (i=1; i<n; i++ ) {
         data[i] = data[i] + data[i-1];
     }
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("sequentialprefixsum() took %f seconds to execute \n", cpu_time_used);
 }
 
 void Barrier() {
@@ -170,6 +176,10 @@ each chunk, in place. Other threads simply wait.
      * PHASE 3: Every thread (except thread 0) adds the final value from the preceding chunk into every
 value in its own chunk, except the last position (which already has its correct value after phase 2), in place.
      */
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
+     
     int i;
 
     // There has to be at least one thread, otherwise what's the point? :)
@@ -223,6 +233,10 @@ value in its own chunk, except the last position (which already has its correct 
     for (i=0; i<NTHREADS; i++) {
         pthread_join(threads[i], NULL);
     }
+    
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("parallelprefixsum() took %f seconds to execute \n", cpu_time_used);
 }
 
 
@@ -231,7 +245,7 @@ int main (int argc, char* argv[]) {
     int *arr1, *arr2, i;
 
     // Check that the compile time constants are sensible for this exercise
-    if ((NITEMS>10000000) || (NTHREADS>32)) {
+    if ((NITEMS>1000000000) || (NTHREADS>32)) {
         printf ("So much data or so many threads may not be a good idea! .... exiting\n");
         exit(EXIT_FAILURE);
     }
